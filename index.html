@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fisioterapia Desportiva - GRECAS Vagos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: {
+                colors: { brand: { navy: '#0B1953', blue: '#1E40AF', lightBlue: '#3B82F6', orange: '#FF5722', orangeHover: '#F4511E' } },
+                fontFamily: { sans: ['Inter', 'sans-serif'] }
+            } }
+        }
+    </script>
+    <style>
+        .glass-card { background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border: 1px solid rgba(226,232,240,.8); }
+        .slot-btn { transition: all .2s cubic-bezier(.4,0,.2,1); }
+        .slot-btn.selected { background-color:#FF5722!important; color:#fff!important; border-color:#FF5722!important; box-shadow:0 4px 12px rgba(255,87,34,.3); }
+        .slot-btn:disabled { background:#f1f5f9; color:#94a3b8; text-decoration:line-through; cursor:not-allowed; box-shadow:none; }
+        .chip-btn { transition: all .2s ease; }
+        .chip-btn.selected { background-color:#0B1953; color:#fff; border-color:#0B1953; }
+        .hp { position:absolute; left:-9999px; height:0; width:0; opacity:0; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 font-sans min-h-screen relative pb-12">
+
+    <div class="fixed inset-0 z-0 opacity-20 pointer-events-none bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
+
+    <header class="relative z-10 w-full bg-brand-navy border-b border-slate-800 text-white shadow-xl">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-gradient-to-br from-brand-orange to-amber-500 text-white font-black text-xl tracking-wider rounded-xl shadow-md border border-white/20 flex items-center justify-center h-11 w-11 sm:h-12 sm:w-12 select-none">GR</div>
+                <div>
+                    <h1 class="font-extrabold text-lg sm:text-xl tracking-tight leading-none">FISIOTERAPIA</h1>
+                    <span class="text-xs text-brand-lightBlue font-semibold uppercase tracking-wider">Grecas Vagos</span>
+                </div>
+            </div>
+            <span class="hidden sm:inline-block bg-blue-900/80 text-blue-200 text-xs px-3 py-1.5 rounded-full border border-blue-700/50 font-medium">⚡ Exclusivo Atletas GRECAS</span>
+        </div>
+    </header>
+
+    <main class="relative z-10 max-w-3xl mx-auto px-4 pt-6">
+
+        <div class="bg-gradient-to-r from-brand-navy via-brand-blue to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-2xl mb-6 relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 opacity-10 text-white pointer-events-none"><i data-lucide="activity" class="w-64 h-64"></i></div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-xs font-semibold mb-3">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Serviço Oficial do Clube
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">Marcação de Fisioterapia</h2>
+            <p class="text-slate-300 text-sm sm:text-base max-w-xl">Tratamento desportivo e recuperação física para atletas do GRECAS. Escolhe o teu horário à quarta-feira.</p>
+            <div class="mt-4 flex flex-wrap gap-4 text-xs font-medium text-slate-200 border-t border-white/10 pt-4">
+                <div class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-4 h-4 text-brand-orange"></i><span>Todas as 4ªs Feiras</span></div>
+                <div class="flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4 text-brand-orange"></i><span>18h00 - 19h30</span></div>
+                <div class="flex items-center gap-1.5"><i data-lucide="timer" class="w-4 h-4 text-brand-orange"></i><span>15 min / sessão</span></div>
+            </div>
+        </div>
+
+        <div id="statusAlert" role="alert" class="hidden mb-6 p-4 rounded-2xl border text-sm font-medium shadow-lg"></div>
+
+        <!-- ECRÃ DE SUCESSO -->
+        <section id="successCard" class="hidden glass-card rounded-3xl p-8 shadow-2xl text-center space-y-4">
+            <div class="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center"><i data-lucide="check" class="w-8 h-8 text-emerald-600"></i></div>
+            <h3 class="text-2xl font-extrabold text-brand-navy">Marcação confirmada!</h3>
+            <p id="successText" class="text-slate-600 text-sm"></p>
+            <div class="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <a id="addToCalendar" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-brand-navy text-white font-semibold text-sm px-5 py-3 rounded-2xl hover:bg-brand-blue transition">
+                    <i data-lucide="calendar-plus" class="w-4 h-4"></i> Adicionar ao meu calendário
+                </a>
+                <button type="button" onclick="newBooking()" class="inline-flex items-center justify-center gap-2 border border-slate-300 text-slate-700 font-semibold text-sm px-5 py-3 rounded-2xl hover:bg-slate-50 transition">Fazer outra marcação</button>
+            </div>
+        </section>
+
+        <form id="bookingForm" class="glass-card rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8" onsubmit="submitForm(event)" novalidate>
+
+            <!-- 1 -->
+            <section class="space-y-4">
+                <div class="flex items-center gap-2 text-brand-navy border-b border-slate-200 pb-2">
+                    <i data-lucide="calendar-days" class="w-5 h-5 text-brand-orange"></i>
+                    <h3 class="font-bold text-lg">1. Escolhe o Dia e Horário</h3>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Quartas-feiras disponíveis</label>
+                    <div id="datesContainer" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Horários (sessões de 15 minutos)</label>
+                    <div id="slotsContainer" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5"></div>
+                    <p id="slotsHint" class="text-xs text-slate-400 mt-2"></p>
+                </div>
+            </section>
+
+            <!-- 2 -->
+            <section class="space-y-4">
+                <div class="flex items-center gap-2 text-brand-navy border-b border-slate-200 pb-2">
+                    <i data-lucide="stethoscope" class="w-5 h-5 text-brand-orange"></i>
+                    <h3 class="font-bold text-lg">2. Qual é a queixa ou zona a tratar?</h3>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Zona afetada (podes escolher várias)</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" data-v="Joelho" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">🦵 Joelho</button>
+                        <button type="button" data-v="Tornozelo / Pé" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">👟 Tornozelo / Pé</button>
+                        <button type="button" data-v="Coxa / Isquiotibiais" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">🏃 Coxa / Isquios</button>
+                        <button type="button" data-v="Gémeos" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">🦶 Gémeos</button>
+                        <button type="button" data-v="Lombar / Costas" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">🧘 Lombar / Costas</button>
+                        <button type="button" data-v="Ombro / Braço" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">💪 Ombro / Braço</button>
+                        <button type="button" data-v="Descarga / Prevenção" onclick="toggleChip(this)" class="chip-btn border border-slate-300 bg-slate-50 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">⚡ Descarga / Prevenção</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="symptoms" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Descrição breve das dores / objetivo</label>
+                    <textarea id="symptoms" rows="2" maxlength="600" placeholder="Ex: Dor no joelho direito durante as séries de treino..." class="w-full rounded-2xl border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-brand-blue focus:outline-none"></textarea>
+                </div>
+            </section>
+
+            <!-- 3 -->
+            <section class="space-y-4">
+                <div class="flex items-center gap-2 text-brand-navy border-b border-slate-200 pb-2">
+                    <i data-lucide="user" class="w-5 h-5 text-brand-orange"></i>
+                    <h3 class="font-bold text-lg">3. Os teus dados</h3>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="athleteName" class="block text-xs font-semibold text-slate-600 mb-1">Nome completo *</label>
+                        <input type="text" id="athleteName" autocomplete="name" required placeholder="Ex: João Silva" class="w-full rounded-xl border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-brand-blue focus:outline-none">
+                    </div>
+                    <div>
+                        <label for="athletePhone" class="block text-xs font-semibold text-slate-600 mb-1">Telemóvel *</label>
+                        <input type="tel" id="athletePhone" autocomplete="tel" inputmode="tel" required placeholder="912 345 678" class="w-full rounded-xl border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-brand-blue focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="athleteEmail" class="block text-xs font-semibold text-slate-600 mb-1">Email (para confirmação) *</label>
+                        <input type="email" id="athleteEmail" autocomplete="email" required placeholder="atleta@email.com" class="w-full rounded-xl border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-brand-blue focus:outline-none">
+                    </div>
+                    <div>
+                        <label for="athleteModality" class="block text-xs font-semibold text-slate-600 mb-1">Disciplina / Escalão</label>
+                        <input type="text" id="athleteModality" placeholder="Ex: Velocidade / Sub-18" class="w-full rounded-xl border border-slate-300 p-3 text-sm focus:ring-2 focus:ring-brand-blue focus:outline-none">
+                    </div>
+                </div>
+                <!-- honeypot anti-spam -->
+                <input type="text" id="website" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+                <label class="flex items-start gap-3 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" id="consent" class="mt-0.5 h-4 w-4 rounded border-slate-300 accent-orange-600">
+                    <span>Autorizo o tratamento dos meus dados pessoais e de saúde, exclusivamente para a gestão desta marcação de fisioterapia. *</span>
+                </label>
+            </section>
+
+            <div class="pt-4 border-t border-slate-200">
+                <button type="submit" id="submitBtn" class="w-full bg-brand-orange hover:bg-brand-orangeHover disabled:opacity-60 text-white font-bold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition active:scale-[0.99] flex items-center justify-center gap-2 text-base">
+                    <i data-lucide="check-circle-2" class="w-5 h-5"></i><span>Confirmar marcação</span>
+                </button>
+                <p class="text-center text-xs text-slate-400 mt-3">Receberás um email de confirmação e o horário fica reservado na agenda da Fisioterapia.</p>
+            </div>
+        </form>
+
+        <footer class="mt-8 text-center text-xs text-slate-400 space-y-1">
+            <p><strong>GRECAS Vagos – Fisioterapia Desportiva</strong></p>
+            <p>Para dúvidas ou cancelamentos, responde ao email de confirmação.</p>
+        </footer>
+    </main>
+
+    <script>
+        // ====================================================================
+        // CONFIGURAÇÃO
+        // ====================================================================
+        const EMAILJS_CONFIG = {
+            PUBLIC_KEY: "M2mPIP977H_5u-BlA",
+            SERVICE_ID: "service_j99i8st",
+            TEMPLATE_ADMIN: "template_j6w6eee",     // email para ti (marcação)
+            TEMPLATE_PATIENT: "template_la8ai7c"    // email de confirmação ao atleta
+        };
+        const ADMIN_EMAIL = "bsb.rehab@gmail.com";
+        const API = "/api";                           // funções Cloudflare (calendário)
+        const SLOT_MINUTES = 15, START = 18 * 60, END = 19 * 60 + 30, WEEKS = 4;
+
+        // ====================================================================
+        // ESTADO
+        // ====================================================================
+        let selectedDate = null;   // { iso: "2026-10-28", label: "28/10/2026" }
+        let selectedTime = null;
+        let calendarApiOk = true;  // passa a false se as funções não existirem/falharem
+
+        const $ = (id) => document.getElementById(id);
+        const pad = (n) => String(n).padStart(2, '0');
+        const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const toLabel = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+
+        window.addEventListener('load', () => {
+            lucide.createIcons();
+            emailjs.init({ publicKey: EMAILJS_CONFIG.PUBLIC_KEY });
+            generateWednesdays();
+        });
+
+        function generateWednesdays() {
+            const box = $('datesContainer');
+            box.innerHTML = '';
+            const d = new Date();
+            d.setHours(12, 0, 0, 0);
+            while (d.getDay() !== 3) d.setDate(d.getDate() + 1);
+            // Se hoje é quarta e já passou das 19:10, começa na seguinte
+            const now = new Date();
+            if (d.toDateString() === now.toDateString() && now.getHours() * 60 + now.getMinutes() >= END - SLOT_MINUTES) d.setDate(d.getDate() + 7);
+
+            for (let i = 0; i < WEEKS; i++) {
+                const date = new Date(d);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'date-btn p-3 rounded-2xl border border-slate-200 bg-white hover:border-brand-blue text-center transition shadow-sm';
+                const month = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '');
+                btn.innerHTML = `<div class="text-xs text-slate-400 font-medium uppercase">Quarta</div><div class="text-lg font-extrabold text-brand-navy">${date.getDate()} ${month}</div>`;
+                btn.onclick = () => selectDate(btn, { iso: toISO(date), label: toLabel(date) });
+                box.appendChild(btn);
+                if (i === 0) selectDate(btn, { iso: toISO(date), label: toLabel(date) });
+                d.setDate(d.getDate() + 7);
+            }
+        }
+
+        async function selectDate(el, date) {
+            document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('border-brand-blue', 'bg-blue-50', 'ring-2', 'ring-brand-blue'));
+            el.classList.add('border-brand-blue', 'bg-blue-50', 'ring-2', 'ring-brand-blue');
+            selectedDate = date;
+            selectedTime = null;
+            await renderSlots();
+        }
+
+        // Pede ao servidor os horários livres; se falhar, mostra todos (modo só-email)
+        async function renderSlots() {
+            const box = $('slotsContainer'), hint = $('slotsHint');
+            box.innerHTML = '<p class="col-span-full text-sm text-slate-400">A verificar disponibilidade…</p>';
+            hint.textContent = '';
+            const wanted = selectedDate.iso;
+
+            let free = null, left = null;
+            try {
+                const r = await fetch(`${API}/slots?date=${wanted}`, { cache: 'no-store' });
+                if (!r.ok) throw new Error(r.status);
+                const data = await r.json();
+                free = Object.fromEntries(data.slots.map(s => [s.time, s.free]));
+                left = Object.fromEntries(data.slots.map(s => [s.time, s.left]));
+                calendarApiOk = true;
+            } catch (e) {
+                calendarApiOk = false;
+                hint.textContent = 'Não foi possível verificar a agenda em tempo real; a marcação será confirmada por email.';
+            }
+            if (wanted !== selectedDate.iso) return; // o utilizador mudou de dia entretanto
+
+            box.innerHTML = '';
+            let anyFree = false;
+            for (let m = START; m + SLOT_MINUTES <= END; m += SLOT_MINUTES) {
+                const t = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+                const isFree = free ? !!free[t] : true;
+                anyFree = anyFree || isFree;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = t;
+                if (left && left[t] === 1) {
+                    const tag = document.createElement('span');
+                    tag.className = 'block text-[10px] font-medium opacity-70 leading-none mt-0.5';
+                    tag.textContent = 'última vaga';
+                    btn.appendChild(tag);
+                }
+                btn.disabled = !isFree;
+                btn.className = 'slot-btn border border-slate-200 bg-white hover:border-brand-orange text-slate-700 font-semibold text-sm py-2.5 px-3 rounded-xl text-center shadow-sm';
+                btn.onclick = () => {
+                    document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedTime = t;
+                };
+                box.appendChild(btn);
+            }
+            if (free && !anyFree) hint.textContent = 'Este dia está completo. Escolhe outra quarta-feira.';
+        }
+
+        function toggleChip(btn) { btn.classList.toggle('selected'); }
+        const getParts = () => [...document.querySelectorAll('.chip-btn.selected')].map(b => b.dataset.v);
+
+        function gcalLink(date, time, name, parts, symptoms) {
+            const [y, mo, d] = date.iso.split('-').map(Number);
+            const [h, mi] = time.split(':').map(Number);
+            const s = new Date(y, mo - 1, d, h, mi);
+            const e = new Date(s.getTime() + SLOT_MINUTES * 60000);
+            const f = (x) => x.toISOString().replace(/[-:]|\.\d{3}/g, '');
+            const q = new URLSearchParams({
+                action: 'TEMPLATE',
+                text: 'Fisioterapia GRECAS',
+                dates: `${f(s)}/${f(e)}`,
+                details: `Atleta: ${name}\nZona: ${parts}\nNotas: ${symptoms}`,
+                location: 'GRECAS - Vagos'
+            });
+            return `https://calendar.google.com/calendar/render?${q}`;
+        }
+
+        function showAlert(html, type) {
+            const el = $('statusAlert');
+            el.className = 'mb-6 p-4 rounded-2xl border text-sm font-medium shadow-lg ' +
+                (type === 'error' ? 'bg-red-50 text-red-800 border-red-200' : type === 'warn' ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200');
+            el.innerHTML = html;
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        const clearAlert = () => $('statusAlert').classList.add('hidden');
+        const errDetail = (e) => `${e?.status ?? ''} ${e?.text || e?.message || e || ''}`.trim();
+
+        function setLoading(on) {
+            const b = $('submitBtn');
+            b.disabled = on;
+            b.innerHTML = on
+                ? '<span class="inline-block animate-spin">⏳</span><span>A registar marcação…</span>'
+                : '<i data-lucide="check-circle-2" class="w-5 h-5"></i><span>Confirmar marcação</span>';
+            lucide.createIcons();
+        }
+
+        async function submitForm(event) {
+            event.preventDefault();
+            clearAlert();
+
+            if ($('website').value) return; // bot
+
+            if (!selectedDate) return showAlert('Seleciona o dia da consulta.', 'error');
+            if (!selectedTime) return showAlert('Seleciona o horário pretendido.', 'error');
+
+            const name = $('athleteName').value.trim();
+            const phone = $('athletePhone').value.trim();
+            const email = $('athleteEmail').value.trim();
+            if (!name) return showAlert('Indica o teu nome.', 'error');
+            if (phone.replace(/\D/g, '').length < 9) return showAlert('Indica um telemóvel válido (9 dígitos).', 'error');
+            if (!/^\S+@\S+\.\S+$/.test(email)) return showAlert('Indica um email válido.', 'error');
+            if (!$('consent').checked) return showAlert('Tens de autorizar o tratamento dos dados para continuar.', 'error');
+
+            const modality = $('athleteModality').value.trim() || 'Não especificado';
+            const symptoms = $('symptoms').value.trim() || 'Sem notas adicionais';
+            const parts = getParts().join(', ') || 'Geral';
+
+            setLoading(true);
+
+            // ---- 1) Reservar no Google Calendar ----
+            let calendarStatus = 'Não registado automaticamente — usar o link abaixo.';
+            if (calendarApiOk) {
+                try {
+                    const r = await fetch(`${API}/book`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            date: selectedDate.iso, time: selectedTime, name, phone, email,
+                            modality, bodyParts: parts, symptoms, website: ''
+                        })
+                    });
+                    const data = await r.json().catch(() => ({}));
+                    if (r.status === 409) {
+                        showAlert('⚠️ ' + (data.error || 'Esse horário acabou de ser ocupado.'), 'error');
+                        setLoading(false);
+                        await renderSlots();
+                        return;
+                    }
+                    if (r.ok) calendarStatus = '✅ Registado no Google Calendar.';
+                    else if (r.status === 400) { showAlert('⚠️ ' + (data.error || 'Dados inválidos.'), 'error'); setLoading(false); return; }
+                    else console.error('Calendário:', r.status, data);
+                } catch (e) { console.error('Calendário:', e); }
+            }
+
+            // ---- 2) Emails (independentes: se um falhar o outro continua) ----
+            const link = gcalLink(selectedDate, selectedTime, name, parts, symptoms);
+            const params = {
+                admin_email: ADMIN_EMAIL,
+                to_email: email,            // usa {{to_email}} OU {{athlete_email}} no campo "To Email" do template do atleta
+                athlete_name: name,
+                athlete_phone: phone,
+                athlete_email: email,
+                reply_to: email,
+                athlete_modality: modality,
+                booking_date: selectedDate.label,
+                booking_time: selectedTime,
+                body_parts: parts,
+                symptoms,
+                gcal_link: link,
+                calendar_status: calendarStatus
+            };
+
+            const [adminRes, patientRes] = await Promise.allSettled([
+                emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_ADMIN, params),
+                emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_PATIENT, params)
+            ]);
+            if (adminRes.status === 'rejected') console.error('EmailJS (admin):', adminRes.reason);
+            if (patientRes.status === 'rejected') console.error('EmailJS (atleta):', patientRes.reason);
+
+            const calendarOk = calendarStatus.startsWith('✅');
+            const anyEmail = adminRes.status === 'fulfilled' || patientRes.status === 'fulfilled';
+            setLoading(false);
+
+            if (!calendarOk && !anyEmail) {
+                // nada ficou registado
+                showAlert(`⚠️ Não foi possível concluir a marcação. Tenta novamente dentro de instantes ou contacta o clube.<br><span class="text-xs font-normal opacity-80">Detalhe técnico: ${errDetail(adminRes.reason)}</span>`, 'error');
+                return;
+            }
+
+            // ---- 3) Sucesso (com avisos se algo parcial falhou) ----
+            $('bookingForm').classList.add('hidden');
+            $('successCard').classList.remove('hidden');
+            $('successText').innerHTML = `A tua consulta está marcada para <strong>${selectedDate.label} às ${selectedTime}</strong> (15 min).` +
+                (patientRes.status === 'fulfilled' ? ` Enviámos a confirmação para <strong>${email}</strong>.` : '');
+            $('addToCalendar').href = link;
+            lucide.createIcons();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if (patientRes.status === 'rejected') {
+                showAlert(`A marcação ficou registada, mas <strong>não foi possível enviar o email de confirmação</strong>. Guarda estes dados ou adiciona ao teu calendário.<br><span class="text-xs font-normal opacity-80">Detalhe técnico: ${errDetail(patientRes.reason)}</span>`, 'warn');
+            }
+        }
+
+        function newBooking() {
+            $('successCard').classList.add('hidden');
+            $('bookingForm').classList.remove('hidden');
+            clearAlert();
+            $('bookingForm').reset();
+            document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('selected'));
+            generateWednesdays();
+        }
+    </script>
+</body>
+</html>

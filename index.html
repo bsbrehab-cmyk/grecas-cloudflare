@@ -7,7 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
+    <script>window.onTurnstileLoad = function () { window.__tsReady = true; if (window.renderTurnstile) window.renderTurnstile(); };</script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad" async defer></script>
     <script>
         tailwind.config = {
             theme: { extend: {
@@ -153,6 +154,7 @@
             </section>
 
             <div class="pt-4 border-t border-slate-200">
+                <div id="turnstileBox" class="flex justify-center mb-4"></div>
                 <button type="submit" id="submitBtn" class="w-full bg-brand-orange hover:bg-brand-orangeHover disabled:opacity-60 text-white font-bold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition active:scale-[0.99] flex items-center justify-center gap-2 text-base">
                     <i data-lucide="check-circle-2" class="w-5 h-5"></i><span>Confirmar marcação</span>
                 </button>
@@ -170,14 +172,9 @@
         // ====================================================================
         // CONFIGURAÇÃO
         // ====================================================================
-        const EMAILJS_CONFIG = {
-            PUBLIC_KEY: "M2mPIP977H_5u-BlA",
-            SERVICE_ID: "service_j99i8st",
-            TEMPLATE_ADMIN: "template_j6w6eee",     // email para ti (marcação)
-            TEMPLATE_PATIENT: "template_la8ai7c"    // email de confirmação ao atleta
-        };
-        const ADMIN_EMAIL = "bsb.rehab@gmail.com";
-        const API = "/api";                           // funções Cloudflare (calendário)
+        const API = "/api";                           // funções Cloudflare (calendário + emails)
+        // Chave PÚBLICA do Cloudflare Turnstile (captcha). Deixa vazio para desativar.
+        const TURNSTILE_SITE_KEY = "";
         const SLOT_MINUTES = 15, START = 18 * 60, END = 19 * 60 + 30, WEEKS = 4;
 
         // ====================================================================
@@ -194,9 +191,26 @@
 
         window.addEventListener('load', () => {
             lucide.createIcons();
-            emailjs.init({ publicKey: EMAILJS_CONFIG.PUBLIC_KEY });
             generateWednesdays();
         });
+
+        // ---- Captcha (Turnstile) ----
+        let turnstileToken = '', turnstileId = null;
+        window.renderTurnstile = function () {
+            if (!TURNSTILE_SITE_KEY || turnstileId !== null || !window.turnstile) return;
+            turnstileId = turnstile.render('#turnstileBox', {
+                sitekey: TURNSTILE_SITE_KEY,
+                language: 'pt',
+                callback: (tk) => { turnstileToken = tk; },
+                'expired-callback': () => { turnstileToken = ''; },
+                'error-callback': () => { turnstileToken = ''; }
+            });
+        };
+        if (window.__tsReady) window.renderTurnstile();
+        function resetCaptcha() {
+            turnstileToken = '';
+            if (turnstileId !== null && window.turnstile) turnstile.reset(turnstileId);
+        }
 
         function generateWednesdays() {
             const box = $('datesContainer');
@@ -305,7 +319,6 @@
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         const clearAlert = () => $('statusAlert').classList.add('hidden');
-        const errDetail = (e) => `${e?.status ?? ''} ${e?.text || e?.message || e || ''}`.trim();
 
         function setLoading(on) {
             const b = $('submitBtn');
@@ -328,10 +341,11 @@
             const name = $('athleteName').value.trim();
             const phone = $('athletePhone').value.trim();
             const email = $('athleteEmail').value.trim();
-            if (!name) return showAlert('Indica o teu nome.', 'error');
+            if (name.length < 3) return showAlert('Indica o teu nome completo.', 'error');
             if (phone.replace(/\D/g, '').length < 9) return showAlert('Indica um telemóvel válido (9 dígitos).', 'error');
             if (!/^\S+@\S+\.\S+$/.test(email)) return showAlert('Indica um email válido.', 'error');
             if (!$('consent').checked) return showAlert('Tens de autorizar o tratamento dos dados para continuar.', 'error');
+            if (TURNSTILE_SITE_KEY && !turnstileToken) return showAlert('Confirma que não és um robô (caixa acima do botão) e tenta de novo.', 'error');
 
             const modality = $('athleteModality').value.trim() || 'Não especificado';
             const symptoms = $('symptoms').value.trim() || 'Sem notas adicionais';
@@ -339,77 +353,47 @@
 
             setLoading(true);
 
-            // ---- 1) Reservar no Google Calendar ----
-            let calendarStatus = 'Não registado automaticamente — usar o link abaixo.';
-            if (calendarApiOk) {
-                try {
-                    const r = await fetch(`${API}/book`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            date: selectedDate.iso, time: selectedTime, name, phone, email,
-                            modality, bodyParts: parts, symptoms, website: ''
-                        })
-                    });
-                    const data = await r.json().catch(() => ({}));
-                    if (r.status === 409) {
-                        showAlert('⚠️ ' + (data.error || 'Esse horário acabou de ser ocupado.'), 'error');
-                        setLoading(false);
-                        await renderSlots();
-                        return;
-                    }
-                    if (r.ok) calendarStatus = '✅ Registado no Google Calendar.';
-                    else if (r.status === 400) { showAlert('⚠️ ' + (data.error || 'Dados inválidos.'), 'error'); setLoading(false); return; }
-                    else console.error('Calendário:', r.status, data);
-                } catch (e) { console.error('Calendário:', e); }
+            let r, data = {};
+            try {
+                r = await fetch(`${API}/book`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: selectedDate.iso, time: selectedTime, name, phone, email,
+                        modality, bodyParts: parts, symptoms, website: '', turnstileToken
+                    })
+                });
+                data = await r.json().catch(() => ({}));
+            } catch (e) {
+                setLoading(false);
+                resetCaptcha();
+                return showAlert('⚠️ Sem ligação ao servidor. Verifica a internet e tenta de novo.', 'error');
             }
-
-            // ---- 2) Emails (independentes: se um falhar o outro continua) ----
-            const link = gcalLink(selectedDate, selectedTime, name, parts, symptoms);
-            const params = {
-                admin_email: ADMIN_EMAIL,
-                to_email: email,            // usa {{to_email}} OU {{athlete_email}} no campo "To Email" do template do atleta
-                athlete_name: name,
-                athlete_phone: phone,
-                athlete_email: email,
-                reply_to: email,
-                athlete_modality: modality,
-                booking_date: selectedDate.label,
-                booking_time: selectedTime,
-                body_parts: parts,
-                symptoms,
-                gcal_link: link,
-                calendar_status: calendarStatus
-            };
-
-            const [adminRes, patientRes] = await Promise.allSettled([
-                emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_ADMIN, params),
-                emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_PATIENT, params)
-            ]);
-            if (adminRes.status === 'rejected') console.error('EmailJS (admin):', adminRes.reason);
-            if (patientRes.status === 'rejected') console.error('EmailJS (atleta):', patientRes.reason);
-
-            const calendarOk = calendarStatus.startsWith('✅');
-            const anyEmail = adminRes.status === 'fulfilled' || patientRes.status === 'fulfilled';
             setLoading(false);
 
-            if (!calendarOk && !anyEmail) {
-                // nada ficou registado
-                showAlert(`⚠️ Não foi possível concluir a marcação. Tenta novamente dentro de instantes ou contacta o clube.<br><span class="text-xs font-normal opacity-80">Detalhe técnico: ${errDetail(adminRes.reason)}</span>`, 'error');
+            // ---- Recusas (nada foi registado) ----
+            if (!r.ok) {
+                resetCaptcha();
+                const detail = data.detail ? `<br><span class="text-xs font-normal opacity-80">Detalhe técnico: ${data.detail}</span>` : '';
+                showAlert('⚠️ ' + (data.error || 'Não foi possível concluir a marcação.') + detail, 'error');
+                if (data.code === 'full') await renderSlots(); // atualiza as vagas
                 return;
             }
 
-            // ---- 3) Sucesso (com avisos se algo parcial falhou) ----
+            // ---- Sucesso (com avisos se algo parcial falhou) ----
+            const link = gcalLink(selectedDate, selectedTime, name, parts, symptoms);
+            const patientMailOk = data.emails?.patient !== false;
             $('bookingForm').classList.add('hidden');
             $('successCard').classList.remove('hidden');
             $('successText').innerHTML = `A tua consulta está marcada para <strong>${selectedDate.label} às ${selectedTime}</strong> (15 min).` +
-                (patientRes.status === 'fulfilled' ? ` Enviámos a confirmação para <strong>${email}</strong>.` : '');
+                (patientMailOk ? ` Enviámos a confirmação para <strong>${email}</strong>.` : '');
             $('addToCalendar').href = link;
             lucide.createIcons();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            resetCaptcha();
 
-            if (patientRes.status === 'rejected') {
-                showAlert(`A marcação ficou registada, mas <strong>não foi possível enviar o email de confirmação</strong>. Guarda estes dados ou adiciona ao teu calendário.<br><span class="text-xs font-normal opacity-80">Detalhe técnico: ${errDetail(patientRes.reason)}</span>`, 'warn');
+            if (!patientMailOk) {
+                showAlert('A marcação ficou registada, mas <strong>não foi possível enviar o email de confirmação</strong>. Guarda estes dados ou adiciona ao teu calendário.', 'warn');
             }
         }
 

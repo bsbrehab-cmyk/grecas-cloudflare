@@ -69,17 +69,7 @@ export async function onRequestPost({ request, env }) {
       console.error('Calendário:', e);
     }
 
-    // --- Sem calendário não há controlo de vagas nem de repetidos: recusa a marcação ---
-    // (para aceitar marcações só por email quando o Google falha, definir CALENDAR_OPTIONAL=1)
-    if (!calendarOk && env.CALENDAR_OPTIONAL !== '1') {
-      return g.json(503, {
-        code: 'calendar',
-        error: 'A agenda está temporariamente indisponível, por isso a marcação não foi feita. Tenta novamente dentro de instantes ou contacta a fisioterapia.',
-        detail: calendarError
-      });
-    }
-
-    // --- emails ---
+    // --- emails (enviados mesmo que o calendário falhe, para a marcação não se perder) ---
     const calendarStatus = calendarOk
       ? '✅ Registado no Google Calendar.'
       : '⚠️ NÃO foi registado no Google Calendar — adicionar manualmente (usar o link).';

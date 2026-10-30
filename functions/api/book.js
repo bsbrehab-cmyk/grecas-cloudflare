@@ -4,6 +4,7 @@
 import * as g from '../../lib/google.js';
 import { verifyTurnstile, checkLimits } from '../../lib/security.js';
 import { sendBookingEmails } from '../../lib/email.js';
+import { manageLink } from '../../lib/links.js';
 
 const clean = (v, max) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
 
@@ -38,7 +39,7 @@ export async function onRequestPost({ request, env }) {
     if (!/^\S+@\S+\.\S+$/.test(data.email)) return g.json(400, { error: 'Email inválido.' });
 
     // --- Google Calendar: vaga + limites + criação ---
-    let calendarOk = false, calendarError = null;
+    let calendarOk = false, calendarError = null, eventId = null;
     try {
       const token = await g.getAccessToken(env);
       const items = await g.getDayEvents(token, data.date);
@@ -50,7 +51,7 @@ export async function onRequestPost({ request, env }) {
       if (limit) return g.json(409, limit);
 
       const endTime = g.toHHMM(g.toMin(data.time) + g.RULES.duration);
-      await g.gcal(`/calendars/${encodeURIComponent(g.calendarId())}/events`, token, {
+      const created = await g.gcal(`/calendars/${encodeURIComponent(g.calendarId())}/events`, token, {
         method: 'POST',
         body: JSON.stringify({
           summary: `Fisio GRECAS – ${data.name}`,
@@ -63,16 +64,30 @@ export async function onRequestPost({ request, env }) {
           reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] }
         })
       });
+      eventId = created.id;
       calendarOk = true;
     } catch (e) {
       calendarError = e.message;
       console.error('Calendário:', e);
     }
 
-    // --- emails (enviados mesmo que o calendário falhe, para a marcação não se perder) ---
+    // --- Sem calendário não há controlo de vagas nem de repetidos: recusa a marcação ---
+    // (para aceitar marcações só por email quando o Google falha, definir CALENDAR_OPTIONAL=1)
+    if (!calendarOk && env.CALENDAR_OPTIONAL !== '1') {
+      return g.json(503, {
+        code: 'calendar',
+        error: 'A agenda está temporariamente indisponível, por isso a marcação não foi feita. Tenta novamente dentro de instantes ou contacta a fisioterapia.',
+        detail: calendarError
+      });
+    }
+
+    // --- emails ---
     const calendarStatus = calendarOk
       ? '✅ Registado no Google Calendar.'
       : '⚠️ NÃO foi registado no Google Calendar — adicionar manualmente (usar o link).';
+    if (eventId) {
+      try { data.manageLink = await manageLink(env, request, eventId); } catch (e) { console.error('Link:', e); }
+    }
     const emails = await sendBookingEmails(env, data, calendarStatus);
 
     if (!calendarOk && !emails.admin.ok && !emails.patient.ok) {

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Gerir marcação - GRECAS Vagos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: {
+            colors: { brand: { navy: '#0B1953', blue: '#1E40AF', lightBlue: '#3B82F6', orange: '#FF5722', orangeHover: '#F4511E' } },
+            fontFamily: { sans: ['Inter', 'sans-serif'] }
+        } } }
+    </script>
+    <style>
+        .glass-card { background: rgba(255,255,255,.96); border: 1px solid rgba(226,232,240,.8); }
+        .slot-btn.selected { background-color:#FF5722!important; color:#fff!important; border-color:#FF5722!important; }
+        .slot-btn:disabled { background:#f1f5f9; color:#94a3b8; text-decoration:line-through; cursor:not-allowed; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 font-sans min-h-screen pb-12">
+    <div class="fixed inset-0 z-0 opacity-20 pointer-events-none bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
+
+    <header class="relative z-10 bg-brand-navy border-b border-slate-800 text-white shadow-xl">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+            <div class="bg-gradient-to-br from-brand-orange to-amber-500 text-white font-black text-xl rounded-xl border border-white/20 flex items-center justify-center h-11 w-11 select-none">GR</div>
+            <div>
+                <h1 class="font-extrabold text-lg leading-none">FISIOTERAPIA</h1>
+                <span class="text-xs text-brand-lightBlue font-semibold uppercase tracking-wider">Gerir a minha marcação</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="relative z-10 max-w-3xl mx-auto px-4 pt-6 space-y-4">
+        <div id="loading" class="glass-card rounded-3xl p-8 text-center text-slate-500 text-sm">A carregar a tua marcação…</div>
+
+        <!-- Mensagem final / erros -->
+        <div id="message" class="hidden glass-card rounded-3xl p-8 text-center space-y-3"></div>
+
+        <!-- Marcação ativa -->
+        <section id="active" class="hidden glass-card rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">A tua marcação</p>
+                <h2 id="who" class="text-xl font-extrabold text-brand-navy"></h2>
+                <p id="when" class="text-lg font-bold text-brand-orange mt-1"></p>
+                <p class="text-xs text-slate-500 mt-1">Duração: 15 minutos</p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button type="button" id="btnReschedule" class="flex-1 bg-brand-navy hover:bg-brand-blue text-white font-semibold text-sm px-5 py-3 rounded-2xl transition">Reagendar</button>
+                <button type="button" id="btnCancel" class="flex-1 border border-red-300 text-red-700 hover:bg-red-50 font-semibold text-sm px-5 py-3 rounded-2xl transition">Cancelar marcação</button>
+            </div>
+
+            <!-- Reagendar -->
+            <div id="reschedulePanel" class="hidden space-y-4 border-t border-slate-200 pt-5">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Nova quarta-feira</label>
+                    <div id="dates" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Novo horário</label>
+                    <div id="slots" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5"></div>
+                    <p class="text-xs text-slate-500 mt-2">Riscado = horário ocupado.</p>
+                </div>
+                <button type="button" id="btnConfirm" class="w-full bg-brand-orange hover:bg-brand-orangeHover disabled:opacity-60 text-white font-bold py-3.5 rounded-2xl transition">Confirmar novo horário</button>
+            </div>
+            <p id="error" class="hidden text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-2xl p-3"></p>
+        </section>
+    </main>
+
+    <script>
+        const API = '/api';
+        const params = new URLSearchParams(location.search);
+        const E = params.get('e') || '', T = params.get('t') || '';
+        const SLOT_MINUTES = 15, START = 18 * 60, END = 19 * 60 + 30, WEEKS = 4;
+        const $ = (id) => document.getElementById(id);
+        const pad = (n) => String(n).padStart(2, '0');
+        const label = (iso) => iso.split('-').reverse().join('/');
+        const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let newDate = null, newTime = null;
+
+        function showMessage(icon, title, text, extraHtml = '') {
+            $('loading').classList.add('hidden');
+            $('active').classList.add('hidden');
+            const m = $('message');
+            m.classList.remove('hidden');
+            m.innerHTML = `<div class="text-4xl">${icon}</div><h2 class="text-xl font-extrabold text-brand-navy">${title}</h2><p class="text-sm text-slate-600">${text}</p>${extraHtml}`;
+        }
+        const newBookingBtn = '<a href="/" class="inline-block bg-brand-navy text-white font-semibold text-sm px-5 py-3 rounded-2xl hover:bg-brand-blue transition">Fazer uma nova marcação</a>';
+        function showError(t) { const e = $('error'); e.textContent = t; e.classList.remove('hidden'); }
+        const clearError = () => $('error').classList.add('hidden');
+
+        async function api(method, body) {
+            const url = method === 'GET' ? `${API}/manage?e=${encodeURIComponent(E)}&t=${encodeURIComponent(T)}` : `${API}/manage`;
+            const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify({ e: E, t: T, ...body }) : undefined });
+            const data = await r.json().catch(() => ({}));
+            return { ok: r.ok, status: r.status, data };
+        }
+
+        async function init() {
+            if (!E || !T) return showMessage('⚠️', 'Ligação inválida', 'Abre esta página a partir do botão do email de confirmação.');
+            try {
+                const { ok, data } = await api('GET');
+                if (!ok) {
+                    return showMessage('⚠️', data.code === 'gone' ? 'Marcação não encontrada' : 'Ligação inválida', esc(data.error || 'Tenta novamente.'), newBookingBtn);
+                }
+                if (data.status === 'cancelled') return showMessage('✅', 'Marcação já cancelada', 'Esta marcação já foi cancelada. A vaga está livre.', newBookingBtn);
+                if (data.status === 'locked') return showMessage('⏱️', 'Já não é possível alterar', `Faltam menos de ${data.hoursLimit} horas para a consulta de <strong>${label(data.date)} às ${data.time}</strong>. Por favor, contacta diretamente a fisioterapia.`);
+                $('who').textContent = data.name;
+                $('when').textContent = `${label(data.date)} às ${data.time}`;
+                $('loading').classList.add('hidden');
+                $('active').classList.remove('hidden');
+            } catch (e) {
+                showMessage('⚠️', 'Sem ligação', 'Não foi possível contactar o servidor. Verifica a internet e tenta de novo.');
+            }
+        }
+
+        $('btnCancel').onclick = async () => {
+            if (!confirm('Tens a certeza que queres cancelar esta marcação?')) return;
+            clearError();
+            $('btnCancel').disabled = true; $('btnCancel').textContent = 'A cancelar…';
+            const { ok, data } = await api('POST', { action: 'cancel' }).catch(() => ({ ok: false, data: {} }));
+            if (ok) return showMessage('✅', 'Marcação cancelada', 'A vaga ficou livre para outro atleta. Obrigado por avisares!', newBookingBtn);
+            $('btnCancel').disabled = false; $('btnCancel').textContent = 'Cancelar marcação';
+            showError(data.error || 'Não foi possível cancelar. Tenta novamente.');
+        };
+
+        // ---------- Reagendar ----------
+        $('btnReschedule').onclick = () => {
+            $('reschedulePanel').classList.toggle('hidden');
+            if (!$('dates').children.length) buildDates();
+        };
+
+        function buildDates() {
+            const box = $('dates');
+            const d = new Date(); d.setHours(12, 0, 0, 0);
+            while (d.getDay() !== 3) d.setDate(d.getDate() + 1);
+            for (let i = 0; i < WEEKS; i++) {
+                const date = new Date(d);
+                const iso = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+                const month = date.toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '');
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'date-btn p-3 rounded-2xl border border-slate-200 bg-white hover:border-brand-blue text-center transition shadow-sm';
+                btn.innerHTML = `<div class="text-xs text-slate-400 font-medium uppercase">Quarta</div><div class="text-lg font-extrabold text-brand-navy">${date.getDate()} ${month}</div>`;
+                btn.onclick = () => pickDate(btn, iso);
+                box.appendChild(btn);
+                d.setDate(d.getDate() + 7);
+            }
+        }
+
+        async function pickDate(el, iso) {
+            document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('border-brand-blue', 'bg-blue-50', 'ring-2', 'ring-brand-blue'));
+            el.classList.add('border-brand-blue', 'bg-blue-50', 'ring-2', 'ring-brand-blue');
+            newDate = iso; newTime = null;
+            const box = $('slots');
+            box.innerHTML = '<p class="col-span-full text-sm text-slate-400">A verificar disponibilidade…</p>';
+            let free = {};
+            try {
+                const r = await fetch(`${API}/slots?date=${iso}`, { cache: 'no-store' });
+                const data = await r.json();
+                free = Object.fromEntries((data.slots || []).map(s => [s.time, s.free]));
+            } catch (e) { box.innerHTML = '<p class="col-span-full text-sm text-red-600">Não foi possível ver os horários.</p>'; return; }
+            if (iso !== newDate) return;
+            box.innerHTML = '';
+            for (let m = START; m + SLOT_MINUTES <= END; m += SLOT_MINUTES) {
+                const t = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+                const b = document.createElement('button');
+                b.type = 'button'; b.textContent = t; b.disabled = !free[t];
+                b.className = 'slot-btn border border-slate-200 bg-white hover:border-brand-orange text-slate-700 font-semibold text-sm py-2.5 px-3 rounded-xl text-center shadow-sm';
+                b.onclick = () => { document.querySelectorAll('.slot-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); newTime = t; };
+                box.appendChild(b);
+            }
+        }
+
+        $('btnConfirm').onclick = async () => {
+            clearError();
+            if (!newDate || !newTime) return showError('Escolhe a nova quarta-feira e o novo horário.');
+            const btn = $('btnConfirm'); btn.disabled = true; btn.textContent = 'A reagendar…';
+            const { ok, data } = await api('POST', { action: 'reschedule', date: newDate, time: newTime }).catch(() => ({ ok: false, data: {} }));
+            btn.disabled = false; btn.textContent = 'Confirmar novo horário';
+            if (ok) {
+                return showMessage('✅', 'Marcação reagendada', `A tua nova consulta é a <strong>${label(data.date)} às ${data.time}</strong>.` +
+                    (data.emails?.patient === false ? '' : ' Enviámos um novo email de confirmação.'));
+            }
+            showError(data.error || 'Não foi possível reagendar. Tenta novamente.');
+            if (data.code === 'full') { const sel = document.querySelector('.date-btn.ring-2'); if (sel) sel.click(); }
+        };
+
+        init();
+    </script>
+</body>
+</html>
